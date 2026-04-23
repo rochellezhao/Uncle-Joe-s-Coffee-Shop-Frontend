@@ -21,3 +21,23 @@ export interface GuestUser {
   name: string;
   signInTime: number;
 }
+
+export interface User {
+  member_id: string;
+  name: string;
+  email: string;
+  authenticated: boolean;
+  token?: string;
+}
+
+export interface Order {
+  id: string;
+  date: string;
+  items: {
+    name: string;
+    quantity: number;
+    price: number;
+  }[];
+  total: number;
+  status: string;
+}

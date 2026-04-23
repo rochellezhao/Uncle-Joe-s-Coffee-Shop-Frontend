@@ -1,33 +1,110 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { LogIn, Mail, Lock, Coffee, User } from 'lucide-react';
+import { LogIn, Mail, Lock, Coffee, User as UserIcon } from 'lucide-react';
+
+import { coffeeApi } from '../services/api';
+import { User as UserType, GuestUser } from '../types';
 
 interface LoginProps {
-  onSignIn: (name: string) => void;
+  onLogin: (user: UserType | GuestUser) => void;
+  navigate: (path: string) => void;
 }
 
-export default function Login({ onSignIn }: LoginProps) {
+export default function Login({ onLogin, navigate }: LoginProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [guestName, setGuestName] = useState('');
   const [loading, setLoading] = useState(false);
-  const [mode, setMode] = useState<'signin' | 'guest'>('guest');
+  const [error, setError] = useState<string | null>(null);
+  const [mode, setMode] = useState<'guest' | 'signin'>('guest');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setError(null);
     
-    if (mode === 'guest') {
-      setTimeout(() => {
-        onSignIn(guestName || 'Valued Guest');
-        setLoading(false);
-      }, 800);
-    } else {
-      setTimeout(() => {
-        setLoading(false);
-        alert('Traditional login is currently in maintenance. Please use Guest Sign-In.');
-        setMode('guest');
-      }, 1000);
+    try {
+      if (mode === 'guest') {
+        const guest: GuestUser = { 
+          name: guestName.trim() || 'Valued Guest', 
+          signInTime: Date.now() 
+        };
+        localStorage.setItem("app_user", JSON.stringify(guest));
+        onLogin(guest);
+        navigate("/");
+        return;
+      } else {
+        const data = await coffeeApi.login(email.trim(), password);
+        console.log("RAW LOGIN RESPONSE:", data);
+
+        const source = data.data || data;
+        
+        // Robust success check: handle boolean/string and nested markers
+        const isAuth = source.authenticated === true || 
+                       source.authenticated === 'true' || 
+                       data.authenticated === true ||
+                       data.authenticated === 'true' ||
+                       data.status === 'success' ||
+                       source.status === 'success' ||
+                       !!source.member_id;
+        
+        if (isAuth) {
+          // Robust name extraction
+          const nameFields = [source.name, source.firstName, source.first_name, source.displayName, source.username];
+          let extractedName = nameFields.find(f => f && typeof f === 'string') || 'Member';
+
+          if (data.message && data.message.toUpperCase().includes('WELCOME TO THE PILOT, ')) {
+            const parts = data.message.toUpperCase().split('WELCOME TO THE PILOT, ');
+            if (parts.length > 1) {
+              const nameFromMsg = parts[1].split(/[.!]/)[0].trim();
+              if (nameFromMsg) extractedName = nameFromMsg;
+            }
+          }
+
+          // Exhaustive member_id resolution logic as per user requirement
+          const resolvedMemberId = data.person_id ||
+                                   data.member_id || 
+                                   data.memberId || 
+                                   data.id || 
+                                   data.user_id || 
+                                   data.user?.person_id ||
+                                   data.user?.member_id || 
+                                   data.user?.memberId || 
+                                   data.user?.id || 
+                                   data.account?.person_id ||
+                                   data.account?.member_id || 
+                                   data.account?.id ||
+                                   source.person_id ||
+                                   source.member_id ||
+                                   source.id;
+
+          // Build exact userSession as requested
+          const userSession = {
+            authenticated: true,
+            member_id: resolvedMemberId,
+            name: data.name ?? data.user?.name ?? data.account?.name ?? extractedName ?? "",
+            email: data.email ?? data.user?.email ?? data.account?.email ?? source.email ?? ""
+          };
+
+          console.log("SESSION BEFORE SAVE:", userSession);
+          localStorage.setItem("app_user", JSON.stringify(userSession));
+          
+          if (source.token) {
+            coffeeApi.setToken(source.token);
+          }
+
+          onLogin(userSession as any);
+          navigate("/");
+          return;
+        } else {
+          setError(data.message || source.message || "Invalid credentials. Please try again.");
+          setLoading(false);
+        }
+      }
+    } catch (err: any) {
+      console.error('LOGIN ERROR:', err);
+      setError(err.message || 'Login failed. Please check your credentials.');
+      setLoading(false);
     }
   };
 
@@ -49,6 +126,12 @@ export default function Login({ onSignIn }: LoginProps) {
             {mode === 'signin' ? 'Sign in to your roasted rewards' : 'Enter your name to continue as a guest'}
           </p>
         </div>
+
+        {error && (
+          <div className="bg-red-50 border border-red-100 text-red-600 text-[10px] uppercase tracking-widest font-bold px-4 py-3 text-center">
+            {error}
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-6">
           {mode === 'signin' ? (
@@ -93,7 +176,7 @@ export default function Login({ onSignIn }: LoginProps) {
                 Your Name
               </label>
               <div className="relative">
-                <User className="absolute left-0 top-1/2 -translate-y-1/2 w-4 h-4 text-coffee-dark/30" />
+                <UserIcon className="absolute left-0 top-1/2 -translate-y-1/2 w-4 h-4 text-coffee-dark/30" />
                 <input 
                   type="text"
                   required

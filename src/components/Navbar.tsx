@@ -1,20 +1,23 @@
-import { Coffee } from 'lucide-react';
-
-import { User, LogOut } from 'lucide-react';
+import { Coffee, User, LogOut } from 'lucide-react';
+import { GuestUser, User as UserType } from '../types';
 
 interface NavbarProps {
   currentPage: string;
   onNavigate: (page: any) => void;
-  guestName?: string;
+  currentUser: UserType | GuestUser | null;
   onSignOut: () => void;
 }
 
-export default function Navbar({ currentPage, onNavigate, guestName, onSignOut }: NavbarProps) {
+export default function Navbar({ currentPage, onNavigate, currentUser, onSignOut }: NavbarProps) {
+  // 5. The Navbar must read the same authenticated user state and show the user's name instead of "Login"
+  const isAuth = currentUser !== null;
+  const userName = currentUser?.name;
+
   const navItems = [
     { id: 'home', label: 'Home' },
     { id: 'locations', label: 'Locations' },
     { id: 'menu', label: 'Menu' },
-    { id: 'login', label: 'Login', hidden: !!guestName },
+    { id: 'login', label: 'Login', hidden: isAuth },
   ].filter(i => !i.hidden);
 
   return (
@@ -45,12 +48,17 @@ export default function Navbar({ currentPage, onNavigate, guestName, onSignOut }
           ))}
         </nav>
 
-        {guestName && (
+        {isAuth && (
           <div className="flex items-center gap-6 pb-1 border-l border-black/5 pl-8">
-            <div className="flex items-center gap-2 text-coffee-dark/60">
-              <User className="w-4 h-4" />
-              <span className="text-[10px] uppercase tracking-widest font-bold">{guestName}</span>
-            </div>
+            <button 
+              onClick={() => onNavigate('order-history')}
+              className={`flex items-center gap-2 transition-colors group/user ${
+                currentPage === 'order-history' ? 'text-coffee-accent' : 'text-coffee-dark/60 hover:text-coffee-dark'
+              }`}
+            >
+              <User className="w-4 h-4 group-hover/user:scale-110 transition-transform" />
+              <span className="text-[10px] uppercase tracking-widest font-bold border-b border-transparent group-hover/user:border-coffee-dark/20">{userName}</span>
+            </button>
             <button 
               onClick={onSignOut}
               className="text-[10px] uppercase tracking-widest font-bold text-coffee-dark/40 hover:text-red-600 transition-colors flex items-center gap-1"
